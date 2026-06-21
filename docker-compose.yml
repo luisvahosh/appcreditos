@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: creditos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-creditos}
+      POSTGRES_DB: creditos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U creditos -d creditos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Expón el puerto solo si necesitas conectarte a la BD desde fuera del VPS.
+    # ports:
+    #   - "5432:5432"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://creditos:${POSTGRES_PASSWORD:-creditos}@db:5432/creditos?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?Define AUTH_SECRET en el archivo .env}
+      CRON_SECRET: ${CRON_SECRET:-}
+      AUTH_TRUST_HOST: "true"
+      NODE_ENV: production
+      PORT: "3000"
+      # Ponlo en "true" solo en el primer despliegue para crear los usuarios.
+      RUN_SEED: ${RUN_SEED:-false}
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

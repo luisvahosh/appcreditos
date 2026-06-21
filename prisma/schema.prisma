@@ -1,0 +1,132 @@
+// Esquema Prisma — App de Administración de Créditos
+// Base de datos: PostgreSQL (dev y producción). DATABASE_URL en .env.
+// No se usan enums nativos ni Decimal para mantener un esquema sencillo y
+// portable; los valores permitidos se validan con Zod (lib/constantes.ts) y
+// el dinero se almacena en pesos enteros usando Float (preciso bajo 2^53).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  nombre       String
+  email        String   @unique
+  passwordHash String
+  rol          String   @default("COBRADOR") // ADMIN | COBRADOR | CONSULTA
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  creditosCreados  Credito[]            @relation("CreditoCreador")
+  pagosRegistrados Pago[]               @relation("PagoRegistrador")
+  auditorias       Auditoria[]
+  multasConfig     ConfiguracionMulta[]
+}
+
+model Deudor {
+  id        String   @id @default(cuid())
+  nombre    String
+  documento String?
+  telefono  String?
+  direccion String?
+  notas     String?
+  createdAt DateTime @default(now())
+
+  creditos Credito[]
+}
+
+model Credito {
+  id               String   @id @default(cuid())
+  deudorId         String
+  deudor           Deudor   @relation(fields: [deudorId], references: [id])
+  valorPrestado    Float
+  tasaInteres      Float // fracción por período, ej 0.10 = 10%
+  metodoInteres    String // SIMPLE | CUOTA_FIJA | PLANO
+  periodicidad     String // UNICA | MENSUAL | QUINCENAL | SEMANAL | DIARIA
+  numeroCuotas     Int      @default(1)
+  fechaDesembolso  DateTime
+  fechaVencimiento DateTime
+  estado           String   @default("ACTIVO") // ACTIVO | CANCELADO | EN_MORA | VENCIDO
+  saldoCapital     Float
+  saldoInteres     Float    @default(0)
+  multaAcumulada   Float    @default(0)
+  notas            String?
+  creadoPorId      String?
+  creadoPor        User?    @relation("CreditoCreador", fields: [creadoPorId], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  cuotas Cuota[]
+  pagos  Pago[]
+
+  @@index([deudorId])
+  @@index([estado])
+}
+
+model Cuota {
+  id               String   @id @default(cuid())
+  creditoId        String
+  credito          Credito  @relation(fields: [creditoId], references: [id], onDelete: Cascade)
+  numero           Int
+  fechaVencimiento DateTime
+  valorCuota       Float
+  valorCapital     Float
+  valorInteres     Float
+  abonado          Float    @default(0)
+  saldoPendiente   Float
+  multa            Float    @default(0)
+  estado           String   @default("PENDIENTE") // PENDIENTE | PAGADA | PARCIAL | EN_MORA
+
+  pagos Pago[]
+
+  @@index([creditoId])
+}
+
+model Pago {
+  id              String   @id @default(cuid())
+  creditoId       String
+  credito         Credito  @relation(fields: [creditoId], references: [id], onDelete: Cascade)
+  cuotaId         String?
+  cuota           Cuota?   @relation(fields: [cuotaId], references: [id])
+  valorAbono      Float
+  aplicadoCapital Float    @default(0)
+  aplicadoInteres Float    @default(0)
+  aplicadoMulta   Float    @default(0)
+  fechaPago       DateTime @default(now())
+  registradoPorId String?
+  registradoPor   User?    @relation("PagoRegistrador", fields: [registradoPorId], references: [id])
+  nota            String?
+
+  @@index([creditoId])
+}
+
+model ConfiguracionMulta {
+  id               String   @id @default(cuid())
+  tipo             String   @default("PORCENTAJE") // PORCENTAJE | FIJO
+  valor            Float    @default(0) // si PORCENTAJE: fracción (0.02 = 2%); si FIJO: pesos
+  aplicaPorDiaMora Boolean  @default(true)
+  diasGracia       Int      @default(0)
+  activa           Boolean  @default(true)
+  updatedPorId     String?
+  updatedPor       User?    @relation(fields: [updatedPorId], references: [id])
+  updatedAt        DateTime @updatedAt
+}
+
+model Auditoria {
+  id        String   @id @default(cuid())
+  usuarioId String?
+  usuario   User?    @relation(fields: [usuarioId], references: [id])
+  accion    String
+  entidad   String
+  entidadId String?
+  detalle   String? // JSON serializado
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

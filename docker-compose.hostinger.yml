@@ -1,0 +1,48 @@
+# Compose para Hostinger (Administrador de Docker -> Componer)
+# La imagen de la app se descarga de un registro (Docker Hub / GHCR).
+# La base de datos corre en su PROPIO contenedor (servicio "db").
+#
+# ANTES DE PEGAR EN HOSTINGER, reemplaza:
+#   - TU_USUARIO/appcreditos:latest  -> tu imagen publicada
+#   - CAMBIA_clave_postgres          -> una clave fuerte para Postgres
+#   - CAMBIA_auth_secret             -> genera con: npx auth secret
+#   - CAMBIA_cron_secret             -> un token aleatorio
+# Tras el PRIMER arranque, cambia RUN_SEED a "false" y vuelve a desplegar.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: creditos
+      POSTGRES_PASSWORD: CAMBIA_clave_postgres
+      POSTGRES_DB: creditos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U creditos -d creditos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: TU_USUARIO/appcreditos:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://creditos:CAMBIA_clave_postgres@db:5432/creditos?schema=public"
+      AUTH_SECRET: "CAMBIA_auth_secret"
+      CRON_SECRET: "CAMBIA_cron_secret"
+      AUTH_TRUST_HOST: "true"
+      NODE_ENV: "production"
+      PORT: "3000"
+      RUN_SEED: "true"
+    ports:
+      # "PUERTO_HOST:PUERTO_CONTENEDOR". El 3000 ya está ocupado en el VPS, así que
+      # publicamos en 3100. Cambia solo el número de la izquierda si lo necesitas.
+      - "3100:3000"
+
+volumes:
+  pgdata:
