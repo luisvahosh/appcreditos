@@ -10,6 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:seed": "tsx prisma/seed.ts",
+    "db:demo": "tsx prisma/demo.ts",
+    "db:demo:clean": "tsx prisma/demo-clean.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio"
   },
