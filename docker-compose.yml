@@ -33,7 +33,8 @@ services:
       # Ponlo en "true" solo en el primer despliegue para crear los usuarios.
       RUN_SEED: ${RUN_SEED:-false}
     ports:
-      - "3000:3000"
+      # host:contenedor — el 3000 está ocupado en el VPS, publicamos en 3100.
+      - "3100:3000"
 
 volumes:
   pgdata:
