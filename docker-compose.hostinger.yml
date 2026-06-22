@@ -1,12 +1,13 @@
-# Compose para Hostinger (Administrador de Docker -> Componer)
-# La imagen de la app se descarga de un registro (Docker Hub / GHCR).
+# Compose para el proyecto "appcreditos" del Administrador de Docker de Hostinger.
+# La imagen "appcreditos:latest" se construye ANTES en la Terminal del VPS:
+#   git clone https://github.com/luisvahosh/appcreditos.git /tmp/appcreditos-src
+#   cd /tmp/appcreditos-src && docker build -t appcreditos:latest .
 # La base de datos corre en su PROPIO contenedor (servicio "db").
 #
 # ANTES DE PEGAR EN HOSTINGER, reemplaza:
-#   - TU_USUARIO/appcreditos:latest  -> tu imagen publicada
-#   - CAMBIA_clave_postgres          -> una clave fuerte para Postgres
-#   - CAMBIA_auth_secret             -> genera con: npx auth secret
-#   - CAMBIA_cron_secret             -> un token aleatorio
+#   - CAMBIA_clave_postgres -> una clave fuerte para Postgres (en los DOS lugares)
+#   - CAMBIA_auth_secret    -> genera con: npx auth secret
+#   - CAMBIA_cron_secret    -> un token aleatorio
 # Tras el PRIMER arranque, cambia RUN_SEED a "false" y vuelve a desplegar.
 
 services:
@@ -26,7 +27,9 @@ services:
       retries: 10
 
   app:
-    image: TU_USUARIO/appcreditos:latest
+    image: appcreditos:latest
+    # Usa la imagen construida localmente en el VPS (no la descarga de un registro).
+    pull_policy: never
     restart: unless-stopped
     depends_on:
       db:
