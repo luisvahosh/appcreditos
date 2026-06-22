@@ -3,8 +3,15 @@
 import { useState } from "react";
 import { Copy, Check, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { linkWhatsApp } from "@/lib/whatsapp";
 
-export function MensajeCobro({ mensaje }: { mensaje: string }) {
+export function MensajeCobro({
+  mensaje,
+  telefono,
+}: {
+  mensaje: string;
+  telefono?: string | null;
+}) {
   const [copiado, setCopiado] = useState(false);
 
   async function copiar() {
@@ -17,7 +24,7 @@ export function MensajeCobro({ mensaje }: { mensaje: string }) {
     }
   }
 
-  const wa = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+  const wa = linkWhatsApp(telefono, mensaje);
 
   return (
     <div className="flex flex-col gap-3">

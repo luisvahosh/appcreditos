@@ -320,7 +320,7 @@ export default async function CreditoDetallePage({
               <CardTitle>Mensaje de cobro</CardTitle>
             </CardHeader>
             <CardContent>
-              <MensajeCobro mensaje={mensaje} />
+              <MensajeCobro mensaje={mensaje} telefono={credito.deudor.telefono} />
             </CardContent>
           </Card>
         </div>
