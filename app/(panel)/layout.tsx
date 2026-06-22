@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { ROL_LABEL } from "@/lib/constantes";
 import { Sidebar } from "@/components/panel/sidebar";
+import { MobileNav } from "@/components/panel/mobile-nav";
 import { LogoutButton } from "@/components/panel/logout-button";
 
 export default async function PanelLayout({
@@ -15,8 +16,9 @@ export default async function PanelLayout({
       <Sidebar rol={user.rol} />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
-          <div className="md:hidden text-sm font-semibold text-blue-700">
-            Créditos
+          <div className="flex items-center gap-2 md:hidden">
+            <MobileNav rol={user.rol} />
+            <span className="text-sm font-semibold text-blue-700">Créditos</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <div className="text-right leading-tight">

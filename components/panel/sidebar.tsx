@@ -2,40 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Banknote,
-  LayoutDashboard,
-  HandCoins,
-  Users,
-  Receipt,
-  FileBarChart,
-  Settings,
-  ShieldCheck,
-  UserCog,
-} from "lucide-react";
+import { Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Rol } from "@/lib/constantes";
-
-type Item = {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  roles?: Rol[]; // si se omite, visible para todos
-};
-
-const ITEMS: Item[] = [
-  { href: "/", label: "Tablero", icon: LayoutDashboard },
-  { href: "/creditos", label: "Créditos", icon: HandCoins },
-  { href: "/deudores", label: "Deudores", icon: Users },
-  { href: "/pagos", label: "Pagos", icon: Receipt },
-  { href: "/reportes", label: "Reportes", icon: FileBarChart },
-  { href: "/configuracion/multas", label: "Configuración", icon: Settings, roles: ["ADMIN"] },
-  { href: "/usuarios", label: "Usuarios", icon: UserCog, roles: ["ADMIN"] },
-  { href: "/auditoria", label: "Auditoría", icon: ShieldCheck, roles: ["ADMIN"] },
-];
+import { itemsParaRol, esActivo } from "@/components/panel/nav-items";
 
 export function Sidebar({ rol }: { rol: Rol }) {
   const pathname = usePathname();
+  const items = itemsParaRol(rol);
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
@@ -50,11 +24,8 @@ export function Sidebar({ rol }: { rol: Rol }) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 p-3">
-        {ITEMS.filter((i) => !i.roles || i.roles.includes(rol)).map((item) => {
-          const activo =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
+        {items.map((item) => {
+          const activo = esActivo(pathname, item.href);
           const Icon = item.icon;
           return (
             <Link
