@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, FileText } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireUser, puedeEscribir, esAdmin } from "@/lib/auth";
 import { formatFecha } from "@/lib/format";
@@ -61,6 +61,13 @@ export default async function DeudoresPage() {
                     <TD>{formatFecha(d.createdAt)}</TD>
                     <TD className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <a
+                          href={`/api/export/estado-cuenta/${d.id}`}
+                          download
+                          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                        >
+                          <FileText className="h-3.5 w-3.5" /> Estado de cuenta
+                        </a>
                         {puedeEscribir(user.rol) && (
                           <Link
                             href={`/deudores/${d.id}/editar`}

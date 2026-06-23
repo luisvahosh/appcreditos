@@ -10,6 +10,7 @@ import {
 import { prisma } from "@/lib/db";
 import { formatCOP, formatFecha } from "@/lib/format";
 import { ESTADO_CREDITO_LABEL, type EstadoCredito } from "@/lib/constantes";
+import { calcularPrenda } from "@/lib/prenda";
 
 const styles = StyleSheet.create({
   page: { padding: 32, fontSize: 9, color: "#0f172a" },
@@ -106,6 +107,112 @@ export async function pdfCartera(): Promise<Buffer> {
             </Text>
           </View>
         ))}
+      </Page>
+    </Document>
+  );
+
+  return renderToBuffer(doc);
+}
+
+const ec = StyleSheet.create({
+  c1: { width: "16%" },
+  c2: { width: "40%" },
+  c3: { width: "22%", textAlign: "right" },
+  c4: { width: "22%" },
+});
+
+export async function pdfEstadoCuenta(deudorId: string): Promise<Buffer | null> {
+  const deudor = await prisma.deudor.findUnique({
+    where: { id: deudorId },
+    include: {
+      creditos: { orderBy: { createdAt: "desc" } },
+      prestamosPrenda: { orderBy: { createdAt: "desc" }, include: { cobros: true } },
+    },
+  });
+  if (!deudor) return null;
+
+  const creditos = deudor.creditos.map((c) => ({
+    id: c.id,
+    fecha: c.fechaDesembolso,
+    valor: c.valorPrestado,
+    saldo: c.saldoCapital + c.saldoInteres + c.multaAcumulada,
+    estado: ESTADO_CREDITO_LABEL[c.estado as EstadoCredito] ?? c.estado,
+  }));
+  const prendas = deudor.prestamosPrenda.map((p) => {
+    const r = calcularPrenda({
+      capital: p.capital,
+      tasaInteres: p.tasaInteres,
+      periodos: p.periodos,
+      cobros: p.cobros,
+      pagado: p.pagado,
+    });
+    return { id: p.id, bien: p.bienGarantia, capital: p.capital, saldo: r.saldo, estado: p.estado };
+  });
+  const totalSaldo =
+    creditos.reduce((s, c) => s + c.saldo, 0) +
+    prendas.reduce((s, p) => s + p.saldo, 0);
+
+  const doc = (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.title}>Estado de cuenta</Text>
+        <Text style={styles.subtitle}>Generado el {formatFecha(new Date())}</Text>
+
+        <View style={{ marginBottom: 14 }}>
+          <Text style={{ fontSize: 12, fontWeight: "bold" }}>{deudor.nombre}</Text>
+          {deudor.documento ? <Text>Documento: {deudor.documento}</Text> : null}
+          {deudor.telefono ? <Text>Teléfono: {deudor.telefono}</Text> : null}
+        </View>
+
+        <Text style={styles.sectionTitle}>Créditos</Text>
+        {creditos.length === 0 ? (
+          <Text style={{ marginBottom: 10 }}>Sin créditos.</Text>
+        ) : (
+          <>
+            <View style={[styles.tr, styles.th]}>
+              <Text style={ec.c1}>Desembolso</Text>
+              <Text style={ec.c2}>Valor prestado</Text>
+              <Text style={ec.c3}>Saldo</Text>
+              <Text style={ec.c4}>Estado</Text>
+            </View>
+            {creditos.map((c) => (
+              <View key={c.id} style={styles.tr}>
+                <Text style={ec.c1}>{formatFecha(c.fecha)}</Text>
+                <Text style={ec.c2}>{formatCOP(c.valor)}</Text>
+                <Text style={ec.c3}>{formatCOP(c.saldo)}</Text>
+                <Text style={ec.c4}>{c.estado}</Text>
+              </View>
+            ))}
+          </>
+        )}
+
+        <Text style={[styles.sectionTitle, { marginTop: 14 }]}>Préstamos con prenda</Text>
+        {prendas.length === 0 ? (
+          <Text style={{ marginBottom: 10 }}>Sin préstamos con prenda.</Text>
+        ) : (
+          <>
+            <View style={[styles.tr, styles.th]}>
+              <Text style={ec.c2}>Garantía</Text>
+              <Text style={ec.c3}>Capital</Text>
+              <Text style={ec.c3}>Saldo</Text>
+              <Text style={ec.c4}>Estado</Text>
+            </View>
+            {prendas.map((p) => (
+              <View key={p.id} style={styles.tr}>
+                <Text style={ec.c2}>{p.bien}</Text>
+                <Text style={ec.c3}>{formatCOP(p.capital)}</Text>
+                <Text style={ec.c3}>{formatCOP(p.saldo)}</Text>
+                <Text style={ec.c4}>{p.estado}</Text>
+              </View>
+            ))}
+          </>
+        )}
+
+        <View style={{ marginTop: 16, borderTop: "1px solid #e2e8f0", paddingTop: 8 }}>
+          <Text style={{ fontSize: 12, fontWeight: "bold", textAlign: "right" }}>
+            Saldo total: {formatCOP(totalSaldo)}
+          </Text>
+        </View>
       </Page>
     </Document>
   );
