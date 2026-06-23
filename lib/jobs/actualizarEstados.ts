@@ -1,13 +1,12 @@
 import { prisma } from "@/lib/db";
-import { getConfigMulta } from "@/lib/config";
-import { calcularMora, pendientesCuota } from "@/lib/finanzas";
+import { pendientesCuota } from "@/lib/finanzas";
 
 /**
- * Recalcula multas por mora, saldos y estados de toda la cartera activa.
- * Idempotente: cada ejecución refleja los días de mora vigentes a `hoy`.
+ * Recalcula saldos y estados (en mora / vencido / cancelado) de la cartera.
+ * Las multas son MANUALES (se registran al recibir el pago), por lo que este
+ * proceso ya no genera multas automáticas; solo actualiza estados por fecha.
  */
 export async function recalcularCartera(hoy: Date = new Date()) {
-  const config = await getConfigMulta();
   const creditos = await prisma.credito.findMany({
     where: { estado: { not: "CANCELADO" } },
     include: { cuotas: true },
@@ -23,44 +22,29 @@ export async function recalcularCartera(hoy: Date = new Date()) {
     let hayMora = false;
 
     for (const cuota of credito.cuotas) {
-      const pendInicial = pendientesCuota(cuota);
-      const baseMora = pendInicial.capitalPend + pendInicial.interesPend;
-
-      let nuevaMulta = cuota.multa;
-      let estadoCuota: string = cuota.estado;
-
-      if (baseMora <= 0) {
-        estadoCuota = "PAGADA";
-      } else {
-        const mora = calcularMora(
-          { fechaVencimiento: cuota.fechaVencimiento, saldoPendiente: baseMora },
-          hoy,
-          config,
-        );
-        const multaYaPagada = Math.min(cuota.abonado, cuota.multa);
-        nuevaMulta = multaYaPagada + mora.multa;
-        if (mora.diasMora > 0) {
-          estadoCuota = "EN_MORA";
-          hayMora = true;
-        } else {
-          estadoCuota = cuota.abonado > 0 ? "PARCIAL" : "PENDIENTE";
-        }
-      }
-
-      const pend = pendientesCuota({ ...cuota, multa: nuevaMulta });
+      const pend = pendientesCuota(cuota);
       saldoCapital += pend.capitalPend;
       saldoInteres += pend.interesPend;
       multaAcumulada += pend.multaPend;
 
-      if (nuevaMulta !== cuota.multa || estadoCuota !== cuota.estado || pend.totalPend !== cuota.saldoPendiente) {
+      let estadoCuota: string;
+      if (pend.totalPend <= 0) {
+        estadoCuota = "PAGADA";
+      } else if (cuota.fechaVencimiento < hoy) {
+        estadoCuota = "EN_MORA";
+        hayMora = true;
+      } else {
+        estadoCuota = cuota.abonado > 0 ? "PARCIAL" : "PENDIENTE";
+      }
+
+      if (
+        estadoCuota !== cuota.estado ||
+        pend.totalPend !== cuota.saldoPendiente
+      ) {
         ops.push(
           prisma.cuota.update({
             where: { id: cuota.id },
-            data: {
-              multa: nuevaMulta,
-              saldoPendiente: pend.totalPend,
-              estado: estadoCuota,
-            },
+            data: { saldoPendiente: pend.totalPend, estado: estadoCuota },
           }),
         );
       }
@@ -73,13 +57,12 @@ export async function recalcularCartera(hoy: Date = new Date()) {
     else if (credito.fechaVencimiento < hoy) estadoCredito = "VENCIDO";
     else estadoCredito = "ACTIVO";
 
-    const cambioCredito =
+    if (
       credito.saldoCapital !== saldoCapital ||
       credito.saldoInteres !== saldoInteres ||
       credito.multaAcumulada !== multaAcumulada ||
-      credito.estado !== estadoCredito;
-
-    if (cambioCredito) {
+      credito.estado !== estadoCredito
+    ) {
       ops.push(
         prisma.credito.update({
           where: { id: credito.id },

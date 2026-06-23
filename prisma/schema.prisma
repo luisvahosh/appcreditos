@@ -31,7 +31,7 @@ model User {
 model Deudor {
   id        String   @id @default(cuid())
   nombre    String
-  documento String?
+  documento String?  @unique
   telefono  String?
   direccion String?
   notas     String?

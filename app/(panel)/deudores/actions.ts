@@ -33,24 +33,34 @@ export async function guardarDeudor(
     notas: limpiar(formData.get("notas")),
   };
 
-  if (id) {
-    await prisma.deudor.update({ where: { id }, data });
-    await registrarAuditoria({
-      usuarioId: user.id,
-      accion: "ACTUALIZAR",
-      entidad: "Deudor",
-      entidadId: id,
-      detalle: data,
-    });
-  } else {
-    const creado = await prisma.deudor.create({ data });
-    await registrarAuditoria({
-      usuarioId: user.id,
-      accion: "CREAR",
-      entidad: "Deudor",
-      entidadId: creado.id,
-      detalle: data,
-    });
+  try {
+    if (id) {
+      await prisma.deudor.update({ where: { id }, data });
+      await registrarAuditoria({
+        usuarioId: user.id,
+        accion: "ACTUALIZAR",
+        entidad: "Deudor",
+        entidadId: id,
+        detalle: data,
+      });
+    } else {
+      const creado = await prisma.deudor.create({ data });
+      await registrarAuditoria({
+        usuarioId: user.id,
+        accion: "CREAR",
+        entidad: "Deudor",
+        entidadId: creado.id,
+        detalle: data,
+      });
+    }
+  } catch (e) {
+    if (e && typeof e === "object" && (e as { code?: string }).code === "P2002") {
+      return {
+        ok: false,
+        fieldErrors: { documento: "Ese número de documento ya está registrado" },
+      };
+    }
+    throw e;
   }
 
   revalidatePath("/deudores");

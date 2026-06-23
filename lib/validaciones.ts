@@ -38,12 +38,19 @@ export const creditoSchema = z
   );
 export type CreditoInput = z.infer<typeof creditoSchema>;
 
-export const pagoSchema = z.object({
-  creditoId: z.string().min(1),
-  valorAbono: z.coerce.number().positive("Debe ser mayor a 0"),
-  fechaPago: z.coerce.date().optional(),
-  nota: z.string().trim().optional(),
-});
+export const pagoSchema = z
+  .object({
+    creditoId: z.string().min(1),
+    valorAbono: z.coerce.number().min(0).default(0),
+    // Multa manual en pesos; si > 0, aplaza un período las cuotas pendientes.
+    multaManual: z.coerce.number().min(0).default(0),
+    fechaPago: z.coerce.date().optional(),
+    nota: z.string().trim().optional(),
+  })
+  .refine((d) => d.valorAbono > 0 || d.multaManual > 0, {
+    message: "Ingresa un abono o una multa",
+    path: ["valorAbono"],
+  });
 export type PagoInput = z.infer<typeof pagoSchema>;
 
 export const configMultaSchema = z.object({

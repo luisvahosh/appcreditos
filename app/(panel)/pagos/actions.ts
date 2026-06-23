@@ -8,6 +8,7 @@ import { pagoSchema } from "@/lib/validaciones";
 import { erroresZod, type FormState } from "@/lib/forms";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { distribuirAbono, pendientesCuota } from "@/lib/finanzas";
+import { desplazarUnPeriodo } from "@/lib/creditos";
 
 export async function registrarAbono(
   _prev: FormState,
@@ -19,7 +20,7 @@ export async function registrarAbono(
   if (!parsed.success) {
     return { ok: false, fieldErrors: erroresZod(parsed.error) };
   }
-  const { creditoId, valorAbono, fechaPago, nota } = parsed.data;
+  const { creditoId, valorAbono, multaManual, fechaPago, nota } = parsed.data;
 
   const credito = await prisma.credito.findUnique({
     where: { id: creditoId },
@@ -30,6 +31,7 @@ export async function registrarAbono(
     return { ok: false, error: "El crédito está cancelado." };
   }
 
+  // Distribuye el abono (interés y capital) entre las cuotas pendientes.
   const cuotasCalc = credito.cuotas.map((c) => ({
     id: c.id,
     numero: c.numero,
@@ -39,55 +41,96 @@ export async function registrarAbono(
     abonado: c.abonado,
     multa: c.multa,
   }));
-
   const res = distribuirAbono(cuotasCalc, valorAbono);
-  if (res.aplicado <= 0) {
+
+  if (res.aplicado <= 0 && multaManual <= 0) {
     return { ok: false, error: "El crédito no tiene saldo pendiente por cobrar." };
   }
 
-  // Aplica las asignaciones a las cuotas y recalcula totales del crédito.
-  const cuotaPorId = new Map(credito.cuotas.map((c) => [c.id, { ...c }]));
+  // Estado en memoria de cada cuota tras aplicar el abono.
+  const estados = new Map(
+    credito.cuotas.map((c) => [
+      c.id,
+      {
+        id: c.id,
+        valorCapital: c.valorCapital,
+        valorInteres: c.valorInteres,
+        multa: c.multa,
+        abonado: c.abonado,
+        fechaVencimiento: c.fechaVencimiento,
+      },
+    ]),
+  );
   for (const a of res.asignaciones) {
-    const cuota = cuotaPorId.get(a.cuotaId)!;
-    cuota.abonado = cuota.abonado + a.multa + a.interes + a.capital;
+    const cu = estados.get(a.cuotaId)!;
+    cu.abonado += a.multa + a.interes + a.capital;
   }
 
+  const hoy = new Date();
+  const aplaza = multaManual > 0;
+
+  // Si se paga multa, se aplaza un período cada cuota que aún tiene saldo.
   let saldoCapital = 0;
   let saldoInteres = 0;
-  let multaAcumulada = 0;
+  let hayMora = false;
+  let fechaVencimientoMax = credito.fechaVencimiento;
   const updates = [];
-  for (const cuota of cuotaPorId.values()) {
-    const pend = pendientesCuota(cuota);
+
+  for (const cu of estados.values()) {
+    const pend = pendientesCuota(cu);
+    let fechaVenc = cu.fechaVencimiento;
+
+    if (aplaza && pend.totalPend > 0) {
+      fechaVenc = desplazarUnPeriodo(cu.fechaVencimiento, credito.periodicidad);
+    }
+
     saldoCapital += pend.capitalPend;
     saldoInteres += pend.interesPend;
-    multaAcumulada += pend.multaPend;
-    const saldoPendiente = pend.totalPend;
-    const estado = saldoPendiente <= 0 ? "PAGADA" : cuota.abonado > 0 ? "PARCIAL" : cuota.estado;
+    if (fechaVenc > fechaVencimientoMax) fechaVencimientoMax = fechaVenc;
+
+    const vencida = pend.totalPend > 0 && fechaVenc < hoy;
+    if (vencida) hayMora = true;
+    const estadoCuota =
+      pend.totalPend <= 0
+        ? "PAGADA"
+        : vencida
+          ? "EN_MORA"
+          : cu.abonado > 0
+            ? "PARCIAL"
+            : "PENDIENTE";
+
     updates.push(
       prisma.cuota.update({
-        where: { id: cuota.id },
-        data: { abonado: cuota.abonado, saldoPendiente, estado },
+        where: { id: cu.id },
+        data: {
+          abonado: cu.abonado,
+          saldoPendiente: pend.totalPend,
+          fechaVencimiento: fechaVenc,
+          estado: estadoCuota,
+        },
       }),
     );
   }
 
-  const totalPendiente = saldoCapital + saldoInteres + multaAcumulada;
+  const totalPend = saldoCapital + saldoInteres;
   const estadoCredito =
-    totalPendiente <= 0
+    totalPend <= 0
       ? "CANCELADO"
-      : credito.estado === "CANCELADO"
-        ? "ACTIVO"
-        : credito.estado;
+      : hayMora
+        ? "EN_MORA"
+        : fechaVencimientoMax < hoy
+          ? "VENCIDO"
+          : "ACTIVO";
 
   await prisma.$transaction([
     prisma.pago.create({
       data: {
         creditoId,
         cuotaId: res.asignaciones[0]?.cuotaId ?? null,
-        valorAbono: res.aplicado,
+        valorAbono: res.aplicado + multaManual,
         aplicadoCapital: res.totalCapital,
         aplicadoInteres: res.totalInteres,
-        aplicadoMulta: res.totalMulta,
+        aplicadoMulta: multaManual,
         fechaPago: fechaPago ?? new Date(),
         registradoPorId: user.id,
         nota: nota ?? null,
@@ -96,20 +139,27 @@ export async function registrarAbono(
     ...updates,
     prisma.credito.update({
       where: { id: creditoId },
-      data: { saldoCapital, saldoInteres, multaAcumulada, estado: estadoCredito },
+      data: {
+        saldoCapital,
+        saldoInteres,
+        multaAcumulada: 0,
+        fechaVencimiento: fechaVencimientoMax,
+        estado: estadoCredito,
+      },
     }),
   ]);
 
   await registrarAuditoria({
     usuarioId: user.id,
-    accion: "ABONO",
+    accion: aplaza ? "ABONO_CON_MULTA" : "ABONO",
     entidad: "Credito",
     entidadId: creditoId,
     detalle: {
-      valorAbono: res.aplicado,
+      abono: res.aplicado,
       capital: res.totalCapital,
       interes: res.totalInteres,
-      multa: res.totalMulta,
+      multa: multaManual,
+      aplazo: aplaza,
     },
   });
 

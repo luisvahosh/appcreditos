@@ -1,5 +1,14 @@
+import { addDays, addMonths } from "date-fns";
 import { calcularPlanPagos, redondearPesos } from "@/lib/finanzas";
+import { PERIODICIDAD_DIAS, type Periodicidad } from "@/lib/constantes";
 import type { CreditoInput } from "@/lib/validaciones";
+
+/** Desplaza una fecha un período hacia adelante según la periodicidad. */
+export function desplazarUnPeriodo(fecha: Date, periodicidad: string): Date {
+  const p = periodicidad as Periodicidad;
+  if (p === "MENSUAL" || p === "UNICA") return addMonths(fecha, 1);
+  return addDays(fecha, PERIODICIDAD_DIAS[p] ?? 30);
+}
 
 export interface CreditoConstruido {
   tasaFraccion: number;

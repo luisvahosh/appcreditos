@@ -4,9 +4,7 @@ import { PrismaClient } from "../generated/prisma/client";
 import {
   calcularPlanPagos,
   distribuirAbono,
-  calcularMora,
   pendientesCuota,
-  type ConfigMulta,
 } from "../lib/finanzas/index";
 import type { MetodoInteres, Periodicidad } from "../lib/constantes";
 
@@ -157,23 +155,12 @@ const ESCENARIOS: EscenarioDemo[] = [
   },
 ];
 
-async function getConfig(): Promise<ConfigMulta> {
-  const c = await prisma.configuracionMulta.findFirst({ where: { activa: true } });
-  return {
-    tipo: c?.tipo === "FIJO" ? "FIJO" : "PORCENTAJE",
-    valor: c?.valor ?? 0,
-    aplicaPorDiaMora: c?.aplicaPorDiaMora ?? false,
-    diasGracia: c?.diasGracia ?? 0,
-  };
-}
-
 async function main() {
   console.log("Cargando datos de demostración...");
 
   const admin = await prisma.user.findFirst({ where: { rol: "ADMIN" } });
   const cobrador =
     (await prisma.user.findFirst({ where: { rol: "COBRADOR" } })) ?? admin;
-  const config = await getConfig();
 
   for (const e of ESCENARIOS) {
     const deudor = await prisma.deudor.create({
@@ -263,52 +250,37 @@ async function main() {
       });
     }
 
-    // Recalcula multas, saldos y estados (igual que el job de la app).
+    // Recalcula saldos y estados por fecha (multas manuales, sin mora automática).
     let saldoCapital = 0;
     let saldoInteres2 = 0;
-    let multaAcumulada = 0;
     let hayMora = false;
 
     for (const cuota of cuotas) {
-      const pendInicial = pendientesCuota(cuota);
-      const baseMora = pendInicial.capitalPend + pendInicial.interesPend;
-      let nuevaMulta = cuota.multa;
-      let estadoCuota = "PENDIENTE";
-
-      if (baseMora <= 0) {
-        estadoCuota = "PAGADA";
-      } else {
-        const mora = calcularMora(
-          { fechaVencimiento: cuota.fechaVencimiento, saldoPendiente: baseMora },
-          HOY,
-          config,
-        );
-        nuevaMulta = Math.min(cuota.abonado, cuota.multa) + mora.multa;
-        if (mora.diasMora > 0) {
-          estadoCuota = "EN_MORA";
-          hayMora = true;
-        } else {
-          estadoCuota = cuota.abonado > 0 ? "PARCIAL" : "PENDIENTE";
-        }
-      }
-
-      const pend = pendientesCuota({ ...cuota, multa: nuevaMulta });
+      const pend = pendientesCuota(cuota);
       saldoCapital += pend.capitalPend;
       saldoInteres2 += pend.interesPend;
-      multaAcumulada += pend.multaPend;
+
+      let estadoCuota: string;
+      if (pend.totalPend <= 0) {
+        estadoCuota = "PAGADA";
+      } else if (cuota.fechaVencimiento < HOY) {
+        estadoCuota = "EN_MORA";
+        hayMora = true;
+      } else {
+        estadoCuota = cuota.abonado > 0 ? "PARCIAL" : "PENDIENTE";
+      }
 
       await prisma.cuota.update({
         where: { id: cuota.id },
         data: {
           abonado: cuota.abonado,
-          multa: nuevaMulta,
           saldoPendiente: pend.totalPend,
           estado: estadoCuota,
         },
       });
     }
 
-    const totalPend = saldoCapital + saldoInteres2 + multaAcumulada;
+    const totalPend = saldoCapital + saldoInteres2;
     const estadoCredito =
       totalPend <= 0
         ? "CANCELADO"
@@ -320,7 +292,7 @@ async function main() {
 
     await prisma.credito.update({
       where: { id: credito.id },
-      data: { saldoCapital, saldoInteres: saldoInteres2, multaAcumulada, estado: estadoCredito },
+      data: { saldoCapital, saldoInteres: saldoInteres2, multaAcumulada: 0, estado: estadoCredito },
     });
 
     console.log(`  ${e.nombre} (${e.metodoInteres}/${e.periodicidad}) -> ${estadoCredito}`);

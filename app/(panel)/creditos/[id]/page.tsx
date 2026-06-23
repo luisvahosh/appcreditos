@@ -310,7 +310,13 @@ export default async function CreditoDetallePage({
                     {formatCOP(resumen.totalPagar)}
                   </span>
                 </p>
-                <AbonoForm creditoId={credito.id} totalPagar={resumen.totalPagar} />
+                <AbonoForm
+                  creditoId={credito.id}
+                  totalPagar={resumen.totalPagar}
+                  periodicidadLabel={PERIODICIDAD_LABEL[
+                    credito.periodicidad as Periodicidad
+                  ].toLowerCase()}
+                />
               </CardContent>
             </Card>
           )}

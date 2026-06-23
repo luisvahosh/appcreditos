@@ -14,9 +14,11 @@ function hoyInput() {
 export function AbonoForm({
   creditoId,
   totalPagar,
+  periodicidadLabel,
 }: {
   creditoId: string;
   totalPagar: number;
+  periodicidadLabel: string;
 }) {
   const [state, formAction, pending] = useActionState(
     registrarAbono,
@@ -33,15 +35,30 @@ export function AbonoForm({
           id="valorAbono"
           name="valorAbono"
           type="number"
-          min={1}
+          min={0}
           step={1}
           max={totalPagar > 0 ? totalPagar : undefined}
           placeholder="0"
-          required
         />
       </Campo>
 
-      <Campo label="Fecha del abono" htmlFor="fechaPago" error={fe.fechaPago}>
+      <Campo
+        label="Multa (COP) — opcional"
+        htmlFor="multaManual"
+        error={fe.multaManual}
+        hint={`Si registras una multa, la cuota se aplaza un período (${periodicidadLabel}).`}
+      >
+        <Input
+          id="multaManual"
+          name="multaManual"
+          type="number"
+          min={0}
+          step={1}
+          placeholder="0"
+        />
+      </Campo>
+
+      <Campo label="Fecha" htmlFor="fechaPago" error={fe.fechaPago}>
         <Input id="fechaPago" name="fechaPago" type="date" defaultValue={hoyInput()} />
       </Campo>
 
@@ -55,8 +72,8 @@ export function AbonoForm({
         </p>
       )}
 
-      <Button type="submit" disabled={pending || totalPagar <= 0}>
-        {pending ? "Registrando..." : "Registrar abono"}
+      <Button type="submit" disabled={pending}>
+        {pending ? "Registrando..." : "Registrar pago"}
       </Button>
     </form>
   );
