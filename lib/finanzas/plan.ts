@@ -40,9 +40,10 @@ export function calcularPlanPagos(input: PlanInput): PlanCuota[] {
   const interesesRaw: Decimal[] = [];
 
   if (input.metodoInteres === "PLANO") {
-    // Interés total = capital * tasa * nº períodos, repartido por igual.
+    // Interés plano convencional: interés total = capital * tasa (UNA sola vez),
+    // repartido por igual entre las cuotas. Ej: 500.000 al 15% = 75.000 total.
     const capitalPorCuota = P.div(n);
-    const interesPorCuota = P.mul(i); // = (P*i*n)/n
+    const interesPorCuota = P.mul(i).div(n); // (P*i)/n
     for (let k = 0; k < n; k++) {
       capitalesRaw.push(capitalPorCuota);
       interesesRaw.push(interesPorCuota);

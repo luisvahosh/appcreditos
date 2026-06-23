@@ -28,7 +28,7 @@ describe("calcularPlanPagos", () => {
     expect(plan[0].valorCuota).toBe(1_100_000);
   });
 
-  it("PLANO: interés total = capital * tasa * nº cuotas, repartido", () => {
+  it("PLANO: interés plano = capital * tasa (una vez), repartido entre cuotas", () => {
     const plan = calcularPlanPagos({
       valorPrestado: 1_200_000,
       tasaInteres: 0.05,
@@ -41,9 +41,25 @@ describe("calcularPlanPagos", () => {
     const capital = plan.reduce((s, c) => s + c.valorCapital, 0);
     const interes = plan.reduce((s, c) => s + c.valorInteres, 0);
     expect(capital).toBe(1_200_000);
-    // 1.200.000 * 0.05 * 3 = 180.000
-    expect(interes).toBe(180_000);
-    expect(plan[0].valorInteres).toBe(60_000);
+    // 1.200.000 * 0.05 = 60.000 (una sola vez)
+    expect(interes).toBe(60_000);
+    expect(plan[0].valorInteres).toBe(20_000);
+  });
+
+  it("PLANO: ejemplo del requerimiento (500.000 al 15%, 4 cuotas)", () => {
+    const plan = calcularPlanPagos({
+      valorPrestado: 500_000,
+      tasaInteres: 0.15,
+      metodoInteres: "PLANO",
+      periodicidad: "MENSUAL",
+      numeroCuotas: 4,
+      fechaDesembolso: desembolso,
+    });
+    const interes = plan.reduce((s, c) => s + c.valorInteres, 0);
+    const total = plan.reduce((s, c) => s + c.valorCuota, 0);
+    expect(interes).toBe(75_000); // 500.000 * 15%
+    expect(total).toBe(575_000); // capital + interés
+    expect(plan[0].valorCuota).toBe(143_750); // 575.000 / 4
   });
 
   it("SIMPLE: capital igual por cuota, interés decreciente sobre saldo", () => {
