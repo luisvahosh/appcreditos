@@ -70,6 +70,7 @@ export async function excelPagos(): Promise<Buffer> {
   const ws = wb.addWorksheet("Pagos");
   ws.columns = [
     { header: "Fecha", key: "fecha", width: 14 },
+    { header: "Tipo", key: "tipo", width: 10 },
     { header: "Deudor", key: "deudor", width: 28 },
     { header: "Abono", key: "abono", width: 16 },
     { header: "Capital", key: "capital", width: 14 },
@@ -80,14 +81,33 @@ export async function excelPagos(): Promise<Buffer> {
   ];
   encabezado(ws);
 
-  const pagos = await prisma.pago.findMany({
-    orderBy: { fechaPago: "desc" },
-    include: { credito: { include: { deudor: true } }, registradoPor: true },
-  });
+  const [pagos, pagosPrenda] = await Promise.all([
+    prisma.pago.findMany({
+      orderBy: { fechaPago: "desc" },
+      include: { credito: { include: { deudor: true } }, registradoPor: true },
+    }),
+    prisma.pagoPrenda.findMany({
+      orderBy: { fechaPago: "desc" },
+      include: { prestamo: { include: { deudor: true } }, registradoPor: true },
+    }),
+  ]);
 
-  for (const p of pagos) {
-    ws.addRow({
-      fecha: formatFecha(p.fechaPago),
+  type FilaXls = {
+    fecha: Date;
+    tipo: string;
+    deudor: string;
+    abono: number;
+    capital: number | "";
+    interes: number | "";
+    multa: number | "";
+    registro: string;
+    nota: string;
+  };
+
+  const filas: FilaXls[] = [
+    ...pagos.map((p) => ({
+      fecha: p.fechaPago,
+      tipo: "Crédito",
       deudor: p.credito.deudor.nombre,
       abono: p.valorAbono,
       capital: p.aplicadoCapital,
@@ -95,7 +115,22 @@ export async function excelPagos(): Promise<Buffer> {
       multa: p.aplicadoMulta,
       registro: p.registradoPor?.nombre ?? "",
       nota: p.nota ?? "",
-    });
+    })),
+    ...pagosPrenda.map((p) => ({
+      fecha: p.fechaPago,
+      tipo: "Prenda",
+      deudor: p.prestamo.deudor.nombre,
+      abono: p.valorAbono,
+      capital: "" as const,
+      interes: "" as const,
+      multa: "" as const,
+      registro: p.registradoPor?.nombre ?? "",
+      nota: p.nota ?? "",
+    })),
+  ].sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
+
+  for (const f of filas) {
+    ws.addRow({ ...f, fecha: formatFecha(f.fecha) });
   }
 
   ["abono", "capital", "interes", "multa"].forEach((k) => {

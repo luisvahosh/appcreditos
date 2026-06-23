@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { requireRol } from "@/lib/auth";
 import { formatFechaHora } from "@/lib/format";
+import { formatearDetalle } from "@/lib/auditoria-format";
 import { PageHeader } from "@/components/panel/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -48,8 +49,8 @@ export default async function AuditoriaPage() {
                       <Badge tono="azul">{r.accion}</Badge>
                     </TD>
                     <TD>{r.entidad}</TD>
-                    <TD className="max-w-xs truncate text-xs text-slate-500">
-                      {r.detalle ?? "—"}
+                    <TD className="max-w-md text-xs text-slate-500">
+                      {formatearDetalle(r.detalle)}
                     </TD>
                   </TR>
                 ))}
