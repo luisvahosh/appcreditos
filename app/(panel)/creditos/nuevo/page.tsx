@@ -12,7 +12,7 @@ export default async function NuevoCreditoPage() {
   await requireRol("ADMIN", "COBRADOR");
   const deudores = await prisma.deudor.findMany({
     orderBy: { nombre: "asc" },
-    select: { id: true, nombre: true },
+    select: { id: true, nombre: true, documento: true },
   });
 
   return (

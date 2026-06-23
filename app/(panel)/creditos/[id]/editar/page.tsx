@@ -17,7 +17,7 @@ export default async function EditarCreditoPage({
 
   const [credito, deudores, pagos] = await Promise.all([
     prisma.credito.findUnique({ where: { id } }),
-    prisma.deudor.findMany({ orderBy: { nombre: "asc" }, select: { id: true, nombre: true } }),
+    prisma.deudor.findMany({ orderBy: { nombre: "asc" }, select: { id: true, nombre: true, documento: true } }),
     prisma.pago.count({ where: { creditoId: id } }),
   ]);
   if (!credito) notFound();

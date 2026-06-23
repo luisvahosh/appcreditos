@@ -4,18 +4,15 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 import { crearCredito, editarCredito } from "@/app/(panel)/creditos/actions";
 import { estadoFormInicial } from "@/lib/forms";
-import {
-  METODOS_INTERES,
-  METODO_INTERES_LABEL,
-  PERIODICIDADES,
-  PERIODICIDAD_LABEL,
-} from "@/lib/constantes";
+import { PERIODICIDADES, PERIODICIDAD_LABEL } from "@/lib/constantes";
 import { Campo } from "@/components/forms/campo";
+import {
+  BuscadorDeudor,
+  type DeudorOpcion,
+} from "@/components/forms/buscador-deudor";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button, buttonVariants } from "@/components/ui/button";
-
-type DeudorOpcion = { id: string; nombre: string };
 
 type CreditoData = {
   id: string;
@@ -56,23 +53,18 @@ export function CreditoForm({
   return (
     <form action={formAction} className="flex max-w-2xl flex-col gap-4">
       {credito && <input type="hidden" name="id" value={credito.id} />}
+      {/* Crédito convencional: siempre interés plano. */}
+      <input
+        type="hidden"
+        name="metodoInteres"
+        value={credito?.metodoInteres ?? "PLANO"}
+      />
 
       <Campo label="Deudor" htmlFor="deudorId" error={fe.deudorId}>
-        <Select
-          id="deudorId"
-          name="deudorId"
-          defaultValue={credito?.deudorId ?? deudorIdFijo ?? ""}
-          required
-        >
-          <option value="" disabled>
-            Selecciona un deudor
-          </option>
-          {deudores.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.nombre}
-            </option>
-          ))}
-        </Select>
+        <BuscadorDeudor
+          deudores={deudores}
+          defaultId={credito?.deudorId ?? deudorIdFijo}
+        />
       </Campo>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -92,10 +84,10 @@ export function CreditoForm({
           />
         </Campo>
         <Campo
-          label="Tasa de interés por período (%)"
+          label="Tasa de interés (%)"
           htmlFor="tasaInteresPct"
           error={fe.tasaInteresPct}
-          hint="Porcentaje aplicado en cada período (ej. 10 = 10%)"
+          hint="Interés plano sobre el capital (ej. 15 = 15%)"
         >
           <Input
             id="tasaInteresPct"
@@ -108,24 +100,6 @@ export function CreditoForm({
           />
         </Campo>
       </div>
-
-      <Campo
-        label="Método de interés"
-        htmlFor="metodoInteres"
-        error={fe.metodoInteres}
-      >
-        <Select
-          id="metodoInteres"
-          name="metodoInteres"
-          defaultValue={credito?.metodoInteres ?? "CUOTA_FIJA"}
-        >
-          {METODOS_INTERES.map((m) => (
-            <option key={m} value={m}>
-              {METODO_INTERES_LABEL[m]}
-            </option>
-          ))}
-        </Select>
-      </Campo>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Campo label="Periodicidad" htmlFor="periodicidad" error={fe.periodicidad}>
