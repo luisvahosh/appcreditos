@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   HandCoins,
+  Package,
   Users,
   Receipt,
   FileBarChart,
@@ -20,6 +21,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Tablero", icon: LayoutDashboard },
   { href: "/creditos", label: "Créditos", icon: HandCoins },
+  { href: "/prenda", label: "Prendas", icon: Package },
   { href: "/deudores", label: "Deudores", icon: Users },
   { href: "/pagos", label: "Pagos", icon: Receipt },
   { href: "/reportes", label: "Reportes", icon: FileBarChart },

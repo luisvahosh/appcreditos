@@ -76,3 +76,31 @@ export const usuarioSchema = z.object({
 export type UsuarioInput = z.infer<typeof usuarioSchema>;
 
 export const estadoCreditoSchema = z.enum(ESTADOS_CREDITO);
+
+// --- Préstamos con prenda ---
+
+export const prendaSchema = z.object({
+  deudorId: z.string().min(1, "Selecciona un deudor"),
+  bienGarantia: z.string().trim().min(1, "Indica el bien en garantía"),
+  descripcion: z.string().trim().optional(),
+  capital: z.coerce.number().positive("Debe ser mayor a 0"),
+  tasaInteresPct: z.coerce.number().min(0, "No puede ser negativa"),
+  fechaDesembolso: z.coerce.date(),
+  fechaVencimiento: z.coerce.date().optional(),
+  notas: z.string().trim().optional(),
+});
+export type PrendaInput = z.infer<typeof prendaSchema>;
+
+export const cobroPrendaSchema = z.object({
+  prestamoId: z.string().min(1),
+  concepto: z.string().trim().min(1, "Concepto requerido"),
+  valor: z.coerce.number().positive("Debe ser mayor a 0"),
+  recurrente: z.boolean().default(false),
+});
+
+export const abonoPrendaSchema = z.object({
+  prestamoId: z.string().min(1),
+  valorAbono: z.coerce.number().positive("Debe ser mayor a 0"),
+  fechaPago: z.coerce.date().optional(),
+  nota: z.string().trim().optional(),
+});

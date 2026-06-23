@@ -26,6 +26,8 @@ model User {
   pagosRegistrados Pago[]               @relation("PagoRegistrador")
   auditorias       Auditoria[]
   multasConfig     ConfiguracionMulta[]
+  prestamosPrenda  PrestamoPrenda[]     @relation("PrendaCreador")
+  pagosPrenda      PagoPrenda[]         @relation("PagoPrendaRegistrador")
 }
 
 model Deudor {
@@ -37,7 +39,8 @@ model Deudor {
   notas     String?
   createdAt DateTime @default(now())
 
-  creditos Credito[]
+  creditos        Credito[]
+  prestamosPrenda PrestamoPrenda[]
 }
 
 model Credito {
@@ -129,4 +132,57 @@ model Auditoria {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// --- Préstamos con prenda (garantía) ---
+
+model PrestamoPrenda {
+  id               String   @id @default(cuid())
+  deudorId         String
+  deudor           Deudor   @relation(fields: [deudorId], references: [id])
+  bienGarantia     String
+  descripcion      String?
+  capital          Float
+  tasaInteres      Float // fracción mensual (0.10 = 10%)
+  fechaDesembolso  DateTime
+  fechaVencimiento DateTime
+  periodos         Int      @default(1) // períodos de interés acumulados
+  pagado           Float    @default(0) // total abonado
+  estado           String   @default("ACTIVO") // ACTIVO | CANCELADO | VENCIDO
+  notas            String?
+  creadoPorId      String?
+  creadoPor        User?    @relation("PrendaCreador", fields: [creadoPorId], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  cobros CobroPrenda[]
+  pagos  PagoPrenda[]
+
+  @@index([deudorId])
+  @@index([estado])
+}
+
+model CobroPrenda {
+  id         String         @id @default(cuid())
+  prestamoId String
+  prestamo   PrestamoPrenda @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
+  concepto   String // ej. Parqueadero
+  valor      Float
+  recurrente Boolean        @default(false) // se cobra en cada recálculo
+  createdAt  DateTime       @default(now())
+
+  @@index([prestamoId])
+}
+
+model PagoPrenda {
+  id              String         @id @default(cuid())
+  prestamoId      String
+  prestamo        PrestamoPrenda @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
+  valorAbono      Float
+  fechaPago       DateTime       @default(now())
+  registradoPorId String?
+  registradoPor   User?          @relation("PagoPrendaRegistrador", fields: [registradoPorId], references: [id])
+  nota            String?
+
+  @@index([prestamoId])
 }
